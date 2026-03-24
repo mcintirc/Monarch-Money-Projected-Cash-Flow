@@ -32,7 +32,7 @@ The script scrapes from the rendered budget table:
 
 1. **Total Budgeted Income** — the "Budget" column from the "Total Income" summary row
 2. **Per-category expense data** — for every expense row, grab Budget and Actual values
-3. **Section-level fallback** — if individual rows are collapsed or unbudgeted rows aren't expanded, use the section totals (Fixed, Flexible, Non-Monthly) which include unbudgeted actuals in their "Actual" column
+3. **Section-level fallback** — the script prefers per-row data when individual category rows are visible in the DOM. If rows are collapsed, fall back to section totals (Fixed, Flexible, Non-Monthly). Note: section totals are a degraded fallback because `max(section_actual, section_budget)` can mask per-category overspends that are offset by underspends elsewhere
 
 Calculation: `Total Budgeted Income - Σ max(actual, budget)` for all expense categories.
 
