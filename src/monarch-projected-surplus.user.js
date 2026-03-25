@@ -168,7 +168,6 @@
 
     const tooltipEl = document.createElement('span');
     tooltipEl.textContent = ' \u24D8';
-    tooltipEl.title = 'Greater of income budget or actual, minus the greater of actual or budgeted spending per category';
     tooltipEl.style.cssText = 'cursor: help; opacity: 0.5;';
 
     labelEl.appendChild(tooltipEl);
@@ -205,6 +204,9 @@
     const prefix = isPast ? '' : 'Projected ';
     const word = isPositive ? 'Surplus' : 'Deficit';
     const tooltipEl = labelEl.querySelector('span');
+    tooltipEl.title = isPast
+      ? 'Actual income minus actual spending'
+      : 'Greater of income budget or actual, minus the greater of actual or budgeted spending per category';
     labelEl.textContent = '';
     labelEl.appendChild(document.createTextNode(prefix + word));
     labelEl.appendChild(tooltipEl);
