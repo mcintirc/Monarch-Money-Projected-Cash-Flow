@@ -1,18 +1,11 @@
 {
   "name": "monarch-extension-script",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
+  "type": "module",
+  "license": "ISC",
   "scripts": {
     "test": "vitest run"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
   "devDependencies": {
     "vitest": "^4.1.1"
   }
