@@ -7,3 +7,4 @@ docs/
 .playwright-mcp/
 *.jpg
 *.png
+!screenshots/*.png

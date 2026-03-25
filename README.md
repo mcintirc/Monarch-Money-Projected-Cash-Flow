@@ -8,6 +8,12 @@ Monarch's built-in "Left to budget" number tells you how much of your income you
 
 The script injects a new indicator in the budget sidebar that shows your projected surplus or deficit for the month. It looks and feels like a native part of Monarch's UI.
 
+| Light mode | Dark mode |
+|:---:|:---:|
+| ![Light mode projection](screenshots/Light-mode-projection-negative.png) | ![Dark mode projection](screenshots/Dark-mode-projection-negative.png) |
+
+See more examples in the [screenshots](screenshots/) folder (light/dark, surplus/deficit, projected/actual).
+
 **The formula:**
 
 ```
