@@ -39,8 +39,10 @@
 
   function parseCurrency(text) {
     if (!text) return 0;
-    const cleaned = text.replace(/[^0-9.\-]/g, '');
-    return parseFloat(cleaned) || 0;
+    const trimmed = text.trim();
+    const isNegative = trimmed.startsWith('-') || (trimmed.startsWith('(') && trimmed.endsWith(')'));
+    const cleaned = trimmed.replace(/[^0-9.]/g, '');
+    return (parseFloat(cleaned) || 0) * (isNegative ? -1 : 1);
   }
 
   // --- Calculation (inlined from src/calculate.js) ---
@@ -104,7 +106,6 @@
     tooltipEl.title = 'Income budget minus the greater of actual or budgeted spending per category';
     tooltipEl.style.cssText = 'cursor: help; opacity: 0.5; font-size: 12px;';
 
-    labelEl.appendChild(document.createTextNode(''));
     labelEl.appendChild(tooltipEl);
 
     container.appendChild(valueEl);
@@ -160,12 +161,10 @@
 
       let indicator = document.getElementById(ELEMENT_ID);
       if (!indicator) {
-        indicator = createIndicator();
-        // Insert after the "Left to budget" container
         const leftToBudget = document.querySelector('SELECTOR_LEFT_TO_BUDGET');
-        if (leftToBudget) {
-          leftToBudget.parentNode.insertBefore(indicator, leftToBudget.nextSibling);
-        }
+        if (!leftToBudget) return; // can't inject yet
+        indicator = createIndicator();
+        leftToBudget.parentNode.insertBefore(indicator, leftToBudget.nextSibling);
       }
       updateIndicator(indicator, surplus);
     } finally {
@@ -208,6 +207,7 @@
   function onNavigate() {
     if (isBudgetPage()) {
       waitForElement('SELECTOR_LEFT_TO_BUDGET').then(() => {
+        if (!isBudgetPage()) return; // navigated away before element appeared
         calculate();
         startObserving();
       }).catch(() => {
@@ -218,10 +218,15 @@
     }
   }
 
-  // Listen for SPA navigation (pushState / popstate)
+  // Listen for SPA navigation (pushState / replaceState / popstate)
   const origPushState = history.pushState;
   history.pushState = function (...args) {
     origPushState.apply(this, args);
+    onNavigate();
+  };
+  const origReplaceState = history.replaceState;
+  history.replaceState = function (...args) {
+    origReplaceState.apply(this, args);
     onNavigate();
   };
   window.addEventListener('popstate', onNavigate);
