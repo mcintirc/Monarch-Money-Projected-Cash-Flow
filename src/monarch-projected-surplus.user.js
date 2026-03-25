@@ -13,6 +13,27 @@
   'use strict';
 
   const ELEMENT_ID = 'projected-surplus-indicator';
+  const WIDGET_ROOT_SEL = '[class*="PlanSummaryWidget__Root"]';
+  const CARD_SEL = WIDGET_ROOT_SEL + ' .card';
+  const COLORS = {
+    light: {
+      red: 'rgb(206, 44, 49)',
+      green: 'rgb(33, 131, 88)',
+      redBg: 'rgb(254, 235, 236)',
+      greenBg: 'rgb(230, 246, 235)',
+    },
+    dark: {
+      red: 'rgb(255, 149, 146)',
+      green: 'rgb(61, 214, 140)',
+      redBg: 'rgb(59, 18, 25)',
+      greenBg: 'rgb(19, 45, 33)',
+    },
+  };
+
+  function getThemeColors() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    return isDark ? COLORS.dark : COLORS.light;
+  }
 
   // --- Utility ---
 
@@ -47,38 +68,79 @@
 
   // --- Calculation (inlined from src/calculate.js) ---
 
-  function computeProjectedSurplus(incomeBudget, categories) {
+  function computeProjectedSurplus(incomeBudget, incomeActual, categories) {
+    const effectiveIncome = Math.max(incomeBudget, incomeActual);
     const totalEffectiveCost = categories.reduce((sum, cat) => {
       return sum + Math.max(cat.actual, cat.budget);
     }, 0);
-    return incomeBudget - totalEffectiveCost;
+    return effectiveIncome - totalEffectiveCost;
+  }
+
+  function computeActualSurplus(incomeActual, categories) {
+    const totalSpent = categories.reduce((sum, cat) => sum + cat.actual, 0);
+    return incomeActual - totalSpent;
+  }
+
+  function isPastMonth() {
+    // Parse from page title, e.g. "Monarch | March 2026"
+    const match = document.title.match(/(\w+)\s+(\d{4})/);
+    if (!match) return false;
+
+    const displayed = new Date(`${match[1]} 1, ${match[2]}`);
+    const now = new Date();
+    // Past if the displayed month's last day is before today
+    const endOfDisplayed = new Date(displayed.getFullYear(), displayed.getMonth() + 1, 0);
+    return endOfDisplayed < new Date(now.getFullYear(), now.getMonth(), now.getDate());
   }
 
   // --- DOM Parsing ---
-  // Selectors from docs/dom-selectors.md — replace SELECTOR_* placeholders
+  // Selectors documented in docs/dom-selectors.md
 
-  function getIncomeBudget() {
-    // Find the "Total Income" row's Budget column value
-    const el = document.querySelector('SELECTOR_TOTAL_INCOME_BUDGET');
-    return el ? parseCurrency(el.textContent) : null;
+  function getIncome() {
+    const footers = document.querySelectorAll('[class*="PlanSectionFooter__Root"]');
+    for (const footer of footers) {
+      const title = footer.querySelector('[class*="PlanRowTitle__Title"]');
+      if (title?.textContent?.trim() === 'Total Income') {
+        const columns = footer.querySelectorAll('[class*="PlanGrid__PlanGridColumn"]');
+        if (!columns[0]) return null;
+        return {
+          budget: parseCurrency(columns[0].textContent),
+          actual: parseCurrency(columns[1]?.textContent),
+        };
+      }
+    }
+    return null;
   }
 
   function getExpenseCategories() {
-    // Try per-row extraction first
-    const rows = document.querySelectorAll('SELECTOR_EXPENSE_ROWS');
+    const sectionsContainer = document.querySelector('[class*="Plan__SectionsContainer"]');
+    if (!sectionsContainer) return [];
+
+    const expensesSection = sectionsContainer.children[1];
+    if (!expensesSection) return [];
+
+    // Per-row extraction: individual category rows within the expenses section
+    const rows = expensesSection.querySelectorAll('[class*="PlanGroupRight__StyledPlanGridRow"]');
     if (rows.length > 0) {
-      return Array.from(rows).map(row => ({
-        budget: parseCurrency(row.querySelector('SELECTOR_ROW_BUDGET')?.textContent),
-        actual: parseCurrency(row.querySelector('SELECTOR_ROW_ACTUAL')?.textContent),
-      }));
+      return Array.from(rows).map(row => {
+        const input = row.querySelector('input');
+        const columns = row.querySelectorAll('[class*="PlanGrid__PlanGridColumn"]');
+        return {
+          budget: parseCurrency(input?.value || columns[0]?.textContent),
+          actual: parseCurrency(columns[1]?.textContent),
+        };
+      });
     }
 
-    // Fallback: section-level totals
-    const sections = document.querySelectorAll('SELECTOR_EXPENSE_SECTIONS');
-    return Array.from(sections).map(section => ({
-      budget: parseCurrency(section.querySelector('SELECTOR_SECTION_BUDGET')?.textContent),
-      actual: parseCurrency(section.querySelector('SELECTOR_SECTION_ACTUAL')?.textContent),
-    }));
+    // Fallback: section-level group totals (Fixed, Flexible, Non-Monthly)
+    const groupContainers = expensesSection.querySelectorAll('[class*="PlanGroupRight__Root"]');
+    return Array.from(groupContainers).map(container => {
+      const columns = container.querySelectorAll('[class*="PlanGrid__PlanGridColumn"]');
+      return {
+        budget: parseCurrency(columns[0]?.textContent),
+        actual: parseCurrency(columns[1]?.textContent),
+      };
+    });
   }
 
   // --- Display ---
@@ -87,24 +149,27 @@
     const container = document.createElement('div');
     container.id = ELEMENT_ID;
     container.style.cssText = `
-      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       padding: 16px;
-      border-radius: 12px;
-      margin-top: 12px;
+      border-radius: 8px;
+      gap: 2px;
+      margin: 16px;
     `;
 
     const valueEl = document.createElement('div');
     valueEl.className = 'projected-surplus-value';
-    valueEl.style.cssText = 'font-size: 28px; font-weight: bold;';
+    valueEl.style.cssText = 'font-size: 30px; font-weight: 500; line-height: 45px; font-family: Oracle, sans-serif;';
 
     const labelEl = document.createElement('div');
     labelEl.className = 'projected-surplus-label';
-    labelEl.style.cssText = 'font-size: 13px; opacity: 0.8; margin-top: 4px;';
+    labelEl.style.cssText = 'font-size: 16px; font-weight: 500; font-family: Oracle, sans-serif;';
 
     const tooltipEl = document.createElement('span');
     tooltipEl.textContent = ' \u24D8';
-    tooltipEl.title = 'Income budget minus the greater of actual or budgeted spending per category';
-    tooltipEl.style.cssText = 'cursor: help; opacity: 0.5; font-size: 12px;';
+    tooltipEl.title = 'Greater of income budget or actual, minus the greater of actual or budgeted spending per category';
+    tooltipEl.style.cssText = 'cursor: help; opacity: 0.5;';
 
     labelEl.appendChild(tooltipEl);
 
@@ -124,22 +189,24 @@
     return amount < 0 ? `-${formatted}` : formatted;
   }
 
-  function updateIndicator(container, surplus) {
+  function updateIndicator(container, surplus, isPast) {
     const isPositive = surplus >= 0;
+    const theme = getThemeColors();
+    const color = isPositive ? theme.green : theme.red;
+    const bg = isPositive ? theme.greenBg : theme.redBg;
     const valueEl = container.querySelector('.projected-surplus-value');
     const labelEl = container.querySelector('.projected-surplus-label');
 
     valueEl.textContent = formatCurrency(surplus);
-    valueEl.style.color = isPositive ? '#4ade80' : '#ef4444';
-    container.style.backgroundColor = isPositive
-      ? 'rgba(74, 222, 128, 0.08)'
-      : 'rgba(239, 68, 68, 0.08)';
+    valueEl.style.color = color;
+    labelEl.style.color = color;
+    container.style.backgroundColor = bg;
 
+    const prefix = isPast ? '' : 'Projected ';
+    const word = isPositive ? 'Surplus' : 'Deficit';
     const tooltipEl = labelEl.querySelector('span');
     labelEl.textContent = '';
-    labelEl.appendChild(
-      document.createTextNode(isPositive ? 'Projected Surplus' : 'Projected Deficit')
-    );
+    labelEl.appendChild(document.createTextNode(prefix + word));
     labelEl.appendChild(tooltipEl);
   }
 
@@ -152,23 +219,37 @@
     if (isUpdating) return;
     isUpdating = true;
 
+    // Pause observer while we modify the DOM to prevent feedback loops
+    if (observer) observer.disconnect();
+
     try {
-      const incomeBudget = getIncomeBudget();
-      if (incomeBudget === null) return; // page not ready
+      const income = getIncome();
+      if (income === null) return; // page not ready
 
       const categories = getExpenseCategories();
-      const surplus = computeProjectedSurplus(incomeBudget, categories);
+      const past = isPastMonth();
+      const surplus = past
+        ? computeActualSurplus(income.actual, categories)
+        : computeProjectedSurplus(income.budget, income.actual, categories);
 
       let indicator = document.getElementById(ELEMENT_ID);
       if (!indicator) {
-        const leftToBudget = document.querySelector('SELECTOR_LEFT_TO_BUDGET');
-        if (!leftToBudget) return; // can't inject yet
+        const card = document.querySelector(CARD_SEL);
+        if (!card) return; // can't inject yet
         indicator = createIndicator();
-        leftToBudget.parentNode.insertBefore(indicator, leftToBudget.nextSibling);
+        card.appendChild(indicator);
       }
-      updateIndicator(indicator, surplus);
+      updateIndicator(indicator, surplus, past);
     } finally {
       isUpdating = false;
+      // Resume observer after our DOM changes are done
+      if (observer) {
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+        });
+      }
     }
   }
 
@@ -206,7 +287,7 @@
 
   function onNavigate() {
     if (isBudgetPage()) {
-      waitForElement('SELECTOR_LEFT_TO_BUDGET').then(() => {
+      waitForElement(WIDGET_ROOT_SEL).then(() => {
         if (!isBudgetPage()) return; // navigated away before element appeared
         calculate();
         startObserving();
